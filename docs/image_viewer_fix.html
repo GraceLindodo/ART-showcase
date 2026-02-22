@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>原畫檢視</title>
+<style>
+:root{ --bg:#0b0f17; --card:#121826; --text:#e6ecff; --muted:#9bb0ff; --accent:#7aa2ff; }
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans TC',PingFangTC,'Microsoft JhengHei',sans-serif;}
+.wrap{max-width:1600px;margin:0 auto;padding:18px}
+.header{
+  display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  padding:14px 16px;border-radius:16px;background:var(--card);
+  box-shadow:0 10px 40px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.04)
+}
+h1{margin:0;font-size:18px}
+a{color:var(--accent);text-decoration:none;font-weight:800}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{
+  appearance:none;border:1px solid rgba(255,255,255,.16);
+  background:rgba(18,24,38,.6); color:var(--text);
+  padding:8px 12px;border-radius:12px;cursor:pointer;font-weight:800;
+}
+.btn:hover{filter:brightness(1.1)}
+.note{margin-top:10px;color:var(--muted);font-size:13px;line-height:1.6}
+
+/* 檢視區：寬度上限 1440，剩餘高度可滾動 */
+.viewer{
+  margin-top:14px;
+  border-radius:18px;
+  background: #05070c;
+  border:1px solid rgba(255,255,255,.08);
+  box-shadow:0 12px 50px rgba(0,0,0,.5);
+  width: min(1440px, 96vw);
+  margin-left:auto; margin-right:auto;
+  height: calc(100vh - 110px);
+  overflow: auto;
+  position: relative;
+}
+
+/* 內容：可縮放與拖曳 */
+.stage{
+  position: relative;
+  min-height: 100%;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  padding: 18px;
+}
+.stage.grab{cursor: grab}
+.stage.grabbing{cursor: grabbing}
+
+#img{
+  transform-origin: 0 0;
+  user-select:none;
+  -webkit-user-drag:none;
+  pointer-events: none; /* 由 stage 接管拖曳 */
+  border-radius:14px;
+  box-shadow:0 10px 40px rgba(0,0,0,.55);
+  max-width:none; /* 允許放大 */
+}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <h1 id="it">原畫檢視</h1>
+      <div class="tools">
+        <button class="btn" id="fit">適合寬度</button>
+        <button class="btn" id="one">1:1</button>
+        <button class="btn" id="reset">重置位置</button>
+        <button class="btn" id="close">關閉</button>
+      </div>
+    </div>
+
+    <div class="viewer" id="viewer">
+      <div class="stage grab" id="stage">
+        <img id="img" alt="image"/>
+      </div>
+    </div>
+
+    <div class="note">
+      操作：滑鼠滾輪可放大/縮小；按住拖曳可移動局部（手機可用單指拖曳、雙指縮放由瀏覽器預設縮放行為）。
+    </div>
+  </div>
+
+<script>
+(function(){
+  const p = new URLSearchParams(location.search);
+  const src = p.get('src') || '';
+  const title = p.get('title') || '原畫檢視';
+  document.getElementById('it').textContent = title;
+
+  const img = document.getElementById('img');
+  const stage = document.getElementById('stage');
+  const viewer = document.getElementById('viewer');
+
+  let scale = 1;
+  let x = 0, y = 0;
+  let dragging = false;
+  let startX = 0, startY = 0;
+
+  function apply(){
+    img.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+  }
+
+  function resetPos(){
+    x = 0; y = 0;
+    apply();
+  }
+
+  function fitWidth(){
+    // 以 viewer 內寬（扣 padding）去 fit 圖片自然寬度
+    const pad = 36; // stage padding*2
+    const vw = viewer.clientWidth - pad;
+    const iw = img.naturalWidth || vw;
+    scale = Math.max(0.05, vw / iw);
+    resetPos();
+  }
+
+  function oneToOne(){
+    scale = 1;
+    resetPos();
+  }
+
+  img.onload = ()=>{ fitWidth(); };
+
+  img.src = src;
+
+  // 滾輪縮放（以滑鼠位置為中心）
+  stage.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    const rect = stage.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    const prev = scale;
+    const delta = (e.deltaY > 0) ? 0.9 : 1.1;
+    scale = Math.min(8, Math.max(0.05, scale * delta));
+
+    // 讓縮放以游標位置為中心（簡化）
+    x = mx - (mx - x) * (scale/prev);
+    y = my - (my - y) * (scale/prev);
+    apply();
+  }, {passive:false});
+
+  // 拖曳平移
+  stage.addEventListener('mousedown', (e)=>{
+    dragging = true;
+    stage.classList.remove('grab');
+    stage.classList.add('grabbing');
+    startX = e.clientX - x;
+    startY = e.clientY - y;
+  });
+  window.addEventListener('mouseup', ()=>{
+    dragging = false;
+    stage.classList.remove('grabbing');
+    stage.classList.add('grab');
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if(!dragging) return;
+    x = e.clientX - startX;
+    y = e.clientY - startY;
+    apply();
+  });
+
+  // 按鈕
+  document.getElementById('fit').addEventListener('click', fitWidth);
+  document.getElementById('one').addEventListener('click', oneToOne);
+  document.getElementById('reset').addEventListener('click', resetPos);
+
+  // 關閉（若被瀏覽器阻擋則退回上一頁）
+  document.getElementById('close').addEventListener('click', ()=>{
+    window.close();
+    setTimeout(()=>{ if(document.visibilityState !== 'hidden') history.back(); }, 120);
+  });
+})();
+
+/* --- 作品集原畫：自動連到 image_viewer_fix.html（不再手改 href） --- */
+document.addEventListener('click', (e) => {
+  const img = e.target.closest('#p-original img.iv-img');
+  if (!img) return;
+
+  const src = img.getAttribute('data-full') || img.getAttribute('src');
+  const title = img.getAttribute('alt') || '原畫';
+
+  const url =
+    `image_viewer_fix.html?src=${encodeURIComponent(src)}&title=${encodeURIComponent(title)}`;
+
+  window.open(url, '_blank', 'noopener');
+});
+</script>
+</body>
+</html>
