@@ -36,6 +36,7 @@ a{color:var(--accent);text-decoration:none;font-weight:800}
   width: min(1440px, 96vw);
   margin-left:auto; margin-right:auto;
   height: calc(100vh - 110px);
+  height: calc(100dvh - 110px); /* 行動裝置更準 */
   overflow: auto;
   position: relative;
 }
@@ -51,6 +52,9 @@ a{color:var(--accent);text-decoration:none;font-weight:800}
 }
 .stage.grab{cursor: grab}
 .stage.grabbing{cursor: grabbing}
+
+/* 手機手勢：避免瀏覽器把拖曳/縮放當成頁面捲動 */
+#stage{touch-action:none}
 
 #img{
   transform-origin: 0 0;
@@ -166,6 +170,73 @@ a{color:var(--accent);text-decoration:none;font-weight:800}
     apply();
   });
 
+
+  /* --- Touch：單指拖曳 + 雙指縮放 --- */
+  let tMode = 0; // 0 none, 1 pan, 2 pinch
+  let tStartX = 0, tStartY = 0;
+  let pinchStartDist = 0;
+  let pinchStartScale = 1;
+  let pinchMidX = 0, pinchMidY = 0;
+
+  function dist(t1, t2){
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  stage.addEventListener('touchstart', (e)=>{
+    if(e.touches.length === 1){
+      tMode = 1;
+      const t = e.touches[0];
+      tStartX = t.clientX - x;
+      tStartY = t.clientY - y;
+    }else if(e.touches.length === 2){
+      tMode = 2;
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      pinchStartDist = dist(t1, t2);
+      pinchStartScale = scale;
+
+      const rect = stage.getBoundingClientRect();
+      pinchMidX = ((t1.clientX + t2.clientX)/2) - rect.left;
+      pinchMidY = ((t1.clientY + t2.clientY)/2) - rect.top;
+    }
+  }, {passive:false});
+
+  stage.addEventListener('touchmove', (e)=>{
+    if(tMode === 1 && e.touches.length === 1){
+      e.preventDefault();
+      const t = e.touches[0];
+      x = t.clientX - tStartX;
+      y = t.clientY - tStartY;
+      apply();
+    }else if(tMode === 2 && e.touches.length === 2){
+      e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const d = dist(t1, t2);
+      const prev = scale;
+
+      scale = Math.min(8, Math.max(0.05, pinchStartScale * (d / pinchStartDist)));
+
+      x = pinchMidX - (pinchMidX - x) * (scale/prev);
+      y = pinchMidY - (pinchMidY - y) * (scale/prev);
+      apply();
+    }
+  }, {passive:false});
+
+  stage.addEventListener('touchend', (e)=>{
+    if(e.touches.length === 0){
+      tMode = 0;
+    }else if(e.touches.length === 1){
+      tMode = 1;
+      const t = e.touches[0];
+      tStartX = t.clientX - x;
+      tStartY = t.clientY - y;
+    }
+  });
+
+
   // 按鈕
   document.getElementById('fit').addEventListener('click', fitWidth);
   document.getElementById('one').addEventListener('click', oneToOne);
@@ -177,20 +248,6 @@ a{color:var(--accent);text-decoration:none;font-weight:800}
     setTimeout(()=>{ if(document.visibilityState !== 'hidden') history.back(); }, 120);
   });
 })();
-
-/* --- 作品集原畫：自動連到 image_viewer_fix.html（不再手改 href） --- */
-document.addEventListener('click', (e) => {
-  const img = e.target.closest('#p-original img.iv-img');
-  if (!img) return;
-
-  const src = img.getAttribute('data-full') || img.getAttribute('src');
-  const title = img.getAttribute('alt') || '原畫';
-
-  const url =
-    `image_viewer_fix.html?src=${encodeURIComponent(src)}&title=${encodeURIComponent(title)}`;
-
-  window.open(url, '_blank', 'noopener');
-});
 </script>
 </body>
 </html>
