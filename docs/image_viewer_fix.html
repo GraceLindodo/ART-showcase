@@ -245,7 +245,9 @@ a{color:var(--accent);text-decoration:none;font-weight:800}
   // 關閉（若被瀏覽器阻擋則退回上一頁）
   document.getElementById('close').addEventListener('click', ()=>{
     window.close();
-    setTimeout(()=>{ if(document.visibilityState !== 'hidden') history.back(); }, 120);
+    setTimeout(()=>{
+      if(document.visibilityState !== 'hidden') location.href='index.html#portfolio?sub=original';
+    }, 120);
   });
 })();
 </script>

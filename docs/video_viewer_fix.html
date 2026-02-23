@@ -63,8 +63,10 @@ video{width:100%;height:auto;display:block;max-height:80vh}
   if(c){
     c.addEventListener('click', ()=>{
       window.close();
-      setTimeout(()=>{ if(document.visibilityState !== 'hidden') history.back(); }, 120);
-    });
+      setTimeout(()=>{
+        if(document.visibilityState !== 'hidden') location.href='index.html#portfolio?sub=video';
+      }, 120);
+});
   }
 })();
 </script>
